@@ -133,6 +133,14 @@
   /**
    * 
    */
+  $.fn.region = function() {
+    return new $.Region(this);
+  };
+
+
+  /**
+   * 
+   */
   $.Viewport = $.extend(new $.Region(), {
 
 
