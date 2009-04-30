@@ -1,8 +1,9 @@
 (function ($) {
 
 
-  var Region,
-      Viewport,
+  var window = this,
+      Region,
+      ViewportRegion,
       createJQueryFunction,
       method;
 
@@ -10,130 +11,118 @@
   /**
    * Creates a two-dimensional region with methods for spatial comparison
    *
-   * Constructor accepts variable arguments.
-   *
-   * If one argument is passed:
-   * @param {Region|String|jQuery|DOMElement} arg
+   * @param {Region|String|jQuery|DOMElement|window|Object} r
    * @throws Unable to find DOM element
    * @throws Invalid argument
-   *
-   * If two arguments are passed:
-   * @param {Number} x1 left coordinate
-   * @param {Number} y1 top coordinate
-   * @throws Invalid arguments
-   *
-   * If four arguments are passed:
-   * @param {Number} x1 left coordinate
-   * @param {Number} y1 top coordinate
-   * @param {Number} x2 right coordinate
-   * @param {Number} y2 bottom coordinate
-   * @throws Invalid arguments
-   *
-   * @constructs Region instance
    * @throws Invalid number of arguments
+   * @constructs Region instance
    * @returns Region instance
    */
-  Region = function () {
+  Region = function (r /*, clone */) {
 
-    var el, offset, x, y, x1, y1, x2, y2;
 
+    var offset, top, left, bottom, right;
+
+     
     /**
-     * If one argument is passed, attempt to resolve the argument in one of
-     * four ways:
-     *
-     *   * Region instance
-     *   * jQuery instance
-     *   * jQuery selector (string)
-     *   * DOM element
+     * If the argument is an instance of Region, clone it or pass it.
      */
-    if (arguments.length === 1) {
-
-      el = arguments[0];
-
+    if (r instanceof Region) {
+      
       /**
-       * If the argument is an instance of Region, clone it.
+       * If clone flag is true, clone the region instead of passing it.
        */
-      if (el instanceof Region) {
-
-        this.left   = el.left;
-        this.top    = el.top;
-        this.right  = el.right;
-        this.bottom = el.bottom;
-
+      if (arguments.length > 1 && arguments[1] == true) {
+    
+        this.left   = r.left;
+        this.top    = r.top;
+        this.right  = r.right;
+        this.bottom = r.bottom;
+        this.width  = r.width;
+        this.height = r.height;
+    
       /**
-       * If the argument is a jQuery selector, a jQuery instance, or a DOM
-       * element, create the region from the space occupied by the element.
-       */
-      } else if (typeof el === 'string' || el instanceof $ || (el.nodeType && el.nodeType === 1)) {
-
-        if (!(el instanceof $)) {
-          el = $(el);
-        }
-
-        /**
-         * Unable to find matching DOM element
-         */
-        if (el.size() === 0) {
-          throw new TypeError('Region: Unable to find DOM element.');
-        }
-
-        offset = el.offset();
-
-        this.left   = offset.left;
-        this.top    = offset.top;
-        this.right  = offset.left + el.width();
-        this.bottom = offset.top + el.height();
-
-      /**
-       * Unable to determine usable argument.
+       * If clone flag is not true, pass through the original region.
        */
       } else {
+        return r;
+      }
+      
+      
+    /**
+     * If the argument is a jQuery selector, a jQuery instance, or a DOM
+     * element, create the region from the space occupied by the element.
+     */
+    } else if (typeof r === 'string' || r instanceof $ || (r.nodeType && r.nodeType === 1)) {
+
+      if (!(r instanceof $)) {
+        r = $(r);
+      }
+
+      /**
+       * Unable to find matching DOM element
+       */
+      if (r.size() === 0) {
+        throw new TypeError('Region: Unable to find DOM element.');
+      }
+
+      offset = r.offset();
+
+      this.width  = r.width();
+      this.height = r.height();        
+      this.left   = offset.left;
+      this.top    = offset.top;
+      this.right  = offset.left + this.width;
+      this.bottom = offset.top + this.height;
+
+
+    /**
+     * If the argument is the window object, create a region from the visible
+     * area of the document
+     */
+    } else if (r === window) {
+
+      r = $(window);
+
+      this.width  = r.width();
+      this.height = r.height();
+      
+      /**
+       * We need to check for document.body to avoid the error thrown by
+       * calling scrollLeft or scrollTop before document.body is available.
+       * But at this point (before DOMReady), it is effectively 0, so...
+       */
+      this.left   = (document.body) ? r.scrollLeft() : 0;
+      this.top    = (document.body) ? r.scrollTop() : 0;
+      this.right  = this.width + this.left;
+      this.bottom = this.height + this.top;
+
+    /**
+     * 
+     */
+    } else if (arguments.length === 1) {
+      
+      //...
+      if (!('top' in r) || !('left' in r)) {
         throw new TypeError('Region: Invalid argument.');
       }
 
-    /**
-     * If two arguments are passed, create the region from the coordinate
-     * values: x (left/right), y (top/bottom).
-     */
-    } else if (arguments.length === 2) {
-
-      x = parseFloat(arguments[0]);
-      y = parseFloat(arguments[1]);
+      left   = r.left;
+      top    = r.top;
+      right  = ('right' in r) ? r.right : r.left;
+      bottom = ('bottom' in r) ? r.bottom : r.top;
 
       /**
-       * Invalid arguments
+       * Use Math.min and Math.max to allow any ordering of coordinates
        */
-      if (isNaN(x) || isNaN(y)) {
-        throw new TypeError('Region: Invalid arguments. x and y must both be numbers.');
-      }
+      this.left   = Math.min(left, right);
+      this.right  = Math.max(left, right);
+      this.top    = Math.min(top, bottom);
+      this.bottom = Math.max(top, bottom);
+      this.width  = this.right - this.left;
+      this.height = this.bottom - this.top;
 
-      this.left   = x;
-      this.top    = y;
-      this.right  = x;
-      this.bottom = y;
 
-    /**
-     * If four arguments are passed, create the region from the pair of
-     * coordinate values: x1 (left), y1 (top), x2 (right), y2 (bottom).
-     */
-    } else if (arguments.length === 4) {
-
-      x1 = parseFloat(arguments[0]);
-      y1 = parseFloat(arguments[1]);
-      x2 = parseFloat(arguments[2]);
-      y2 = parseFloat(arguments[3]);
-
-      /**
-       * Invalid arguments
-       */
-      if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) {
-        throw new TypeError('Region: Invalid arguments. x1, y1, x2, and y2 must all be numbers.');
-      }
-
-      this.left   = x1;
-      this.top    = y1;
-      this.right  = x2;
-      this.bottom = y2;
 
     /**
      * Incorrect number of arguments
@@ -143,17 +132,9 @@
     }
 
     /**
-     * Return the instance from the constructor to simplify factory
+     * Return the instance
      */
     return this;
-  };
-
-
-  /**
-   * Returns a Region instance for comparison methods
-   */
-  Region.factory = function (region) {
-    return (region instanceof Region) ? region : Region.apply({}, arguments);
   };
 
 
@@ -164,10 +145,18 @@
 
 
     /**
+     * Calculates the area of the space occupied by the element
+     */
+    area: function () {
+      return this.width * this.height;
+    },
+
+
+    /**
      * Determines if this region is above the supplied region
      */
-    isAbove: function () {
-      var region = Region.factory.apply(this, arguments);
+    isAbove: function (region) {
+      region = new Region(region);
       return (this.bottom < region.top);
     },
 
@@ -175,8 +164,8 @@
     /**
      * Determines if this region is below the supplied region
      */
-    isBelow: function () {
-      var region = Region.factory.apply(this, arguments);
+    isBelow: function (region) {
+      region = new Region(region);
       return (this.top > region.bottom);
     },
 
@@ -184,8 +173,8 @@
     /**
      * Determines if this region is left of the supplied region
      */
-    isLeftOf: function () {
-      var region = Region.factory.apply(this, arguments);
+    isLeftOf: function (region) {
+      region = new Region(region);
       return (this.right < region.left);
     },
 
@@ -193,8 +182,8 @@
     /**
      * Determines if this region is right of the supplied region
      */
-    isRightOf: function () {
-      var region = Region.factory.apply(this, arguments);
+    isRightOf: function (region) {
+      region = new Region(region);
       return (this.left > region.right);
     },
 
@@ -202,17 +191,40 @@
     /**
      * Determines if this region intersects the supplied region
      */
-    intersects: function () {
-      var region = Region.factory.apply(this, arguments);
+    intersects: function (region) {
+      region = new Region(region);
       return (Math.min(this.bottom, region.bottom) >= Math.max(this.top, region.top) && Math.min(this.right, region.right) >= Math.max(this.left, region.left));
+    },
+
+
+    /**
+     * Calculates and returns the intersected region 
+     */
+    intersection: function (region) {
+
+      console.log(region);
+      region = new Region(region);
+
+      if (this.intersects(region)) {
+
+        return new Region({
+          left:   Math.max(this.left,   region.left),
+          top:    Math.max(this.top,    region.top),
+          right:  Math.min(this.right,  region.right),
+          bottom: Math.min(this.bottom, region.bottom)
+        });
+        
+      } else {
+        return null;
+      }
     },
 
 
     /**
      * Determines if this region contains the supplied region
      */
-    contains: function () {
-      var region = Region.factory.apply(this, arguments);
+    contains: function (region) {
+      region = new Region(region);
       return (this.left <= region.left && this.top <= region.top && this.right >= region.right && this.bottom >= region.bottom);
     },
 
@@ -220,8 +232,8 @@
     /**
      * Determines if this region is contained by the supplied region
      */
-    isContainedBy: function () {
-      var region = Region.factory.apply(this, arguments);
+    isContainedBy: function (region) {
+      region = new Region(region);
       return (this.top >= region.top && this.bottom <= region.bottom && this.left >= region.left && this.right <= region.right);
     }
   };
@@ -236,8 +248,32 @@
   /**
    * Add Region constructor as jQuery instance method
    */
-  $.fn.region = function () {
-    return new Region(this);
+  /**
+   * @todo handle multiple objects, you lazy beast
+   * @todo think this method thru
+   */
+    
+  $.fn.region = function (/* region */) {
+
+    var region;
+    
+    if (arguments.length > 0) {
+      
+      region = new Region(arguments[0]);
+
+      return $(this).css({
+        position: 'absolute',
+        left:     region.left,
+        top:      region.top,
+        width:    region.width,
+        height:   region.height
+      });
+      
+    } else {
+      
+      return new Region(this);
+
+    }
   };
 
 
@@ -261,13 +297,10 @@
   /**
    *
    */
-  Viewport = function () {
+  ViewportRegion = function () {
 
     var vp = this;
 
-    /**
-     * Update the viewport coordinates when the DOM is ready
-     */
     if ($.isReady) {
       vp.update();
     } else {
@@ -276,16 +309,16 @@
       });
     }
 
-    this.window = $(window).bind('resize scroll', function () {
+    this.window = $(window).bind('load resize scroll', function () {
       vp.update();
     });
   };
 
 
   /**
-   * Prototype for the Viewport class
+   * Prototype for the ViewportRegion class
    */
-  Viewport.prototype = $.extend({
+  ViewportRegion.prototype = $.extend(new Region(window), {
 
 
     /**
@@ -293,10 +326,12 @@
      */
     update: function () {
 
+      this.width  = this.window.width();
+      this.height = this.window.height();
       this.left   = this.window.scrollLeft();
       this.top    = this.window.scrollTop();
-      this.right  = this.window.width() + this.left;
-      this.bottom = this.window.height() + this.top;
+      this.right  = this.width + this.left;
+      this.bottom = this.height + this.top;
 
       /**
        * Trigger the viewport:change event
@@ -319,13 +354,19 @@
     trigger: function () {
       $(this).trigger('viewport:change', this);
     }
-  }, Region.prototype);
+  });
+
+
+  /**
+   * Add the ViewportRegion class to the jQuery namespace
+   */
+  $.ViewportRegion = ViewportRegion;
 
 
   /**
    * Add a Viewport singleton to the jQuery namespace
    */
-  $.Viewport = new Viewport();
-
+  $.Viewport = new ViewportRegion();
+  
 
 }(jQuery));
