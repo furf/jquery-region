@@ -97,8 +97,9 @@
       this.right  = this.width + this.left;
       this.bottom = this.height + this.top;
 
+
     /**
-     * 
+     * ...
      */
     } else if (arguments.length === 1) {
       
@@ -121,7 +122,6 @@
       this.bottom = Math.max(top, bottom);
       this.width  = this.right - this.left;
       this.height = this.bottom - this.top;
-
 
 
     /**
@@ -202,7 +202,6 @@
      */
     intersection: function (region) {
 
-      console.log(region);
       region = new Region(region);
 
       if (this.intersects(region)) {
